@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="SubtitleQc.Core/SubtitleQc.Core.csproj" />
+  <Project Path="SubtitleQc.Tests/SubtitleQc.Tests.csproj" />
+</Solution>

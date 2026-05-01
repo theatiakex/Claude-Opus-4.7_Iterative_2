@@ -63,3 +63,42 @@ test_metrics.jsonl
 Lines 1-2
 {"project_iteration": 1, "attempt": 1, "timestamp": "2026-05-01T12:26:50+02:00", "build_successful": true, "total_tests": 13, "passed": 13, "failed": 0, "pass_rate_percentage": 100.0}
 {"project_iteration": 2, "attempt": 1, "timestamp": "2026-05-01T12:38:00+02:00", "build_successful": true, "total_tests": 13, "passed": 13, "failed": 0, "pass_rate_percentage": 100.0}
+
+
+### Iteration 3
+
+Iteration 3 complete — 19/19 tests pass (13 iteration-1 + 6 iteration-3), 0 regressions, on attempt 2.
+
+What was added
+New files:
+
+Qc/Abstractions/IShotChangeProvider.cs — DIP seam for shot-change data sources.
+Qc/Rules/CrossShotBoundaryCheckRule.cs — time-domain cut crossing.
+Qc/Rules/MinFramesFromShotChangeRule.cs — frame-domain proximity.
+Modified (purely additive):
+
+Models/Cue.cs — added optional trailing parameter int? startFrame = null plus the StartFrame getter. All existing positional and named-argument callers (iteration-1 test, all three parsers) remain valid because the parameter is at the end and has a default.
+Untouched: RuleEngine, QcEvaluationContext, IQcRule, all six iteration-1 rules, ISubtitleParser, SrtParser, WebVttParser, TtmlParser, all timing/block helpers.
+
+What attempt 1 got wrong, and why
+I initially designed external data to flow through QcEvaluationContext and a new Evaluate(SubtitleProgram) engine overload — touching the engine and context. The actual contract in Iteration3ShotChangeRulesTests.cs chooses a different (and stricter) DIP/OCP split:
+
+Each new rule receives its own IShotChangeProvider via constructor — the same pattern existing rules already use for their thresholds.
+The engine and context need zero changes because rule dependencies are private to the rule.
+Frame-domain comparison uses Cue.StartFrame directly instead of computing frames from Time × FrameRate — no global frame rate needed, and time-only formats simply leave StartFrame null.
+This is genuinely cleaner; I should have inferred it from the existing rules' constructor-injection pattern before speculating. Logging the failed attempt 1 build per the agent profile (Section 8) was important — test_metrics.jsonl now shows the corrective trajectory.
+
+Design notes (the "why")
+Why a provider interface, not raw lists. A List<TimeSpan> couples rules to a concrete data shape. IShotChangeProvider lets a future iteration plug a streaming source, a database-backed source, or a cached-file source without touching rule code.
+Why both Timestamps and Frames projections on the provider. The two rules operate in genuinely different domains — CrossShotBoundary cares only about timeline overlap; MinFramesFromShotChange cares about exact frame counts (sub-frame timing rounding errors would cause spurious failures). Forcing one domain to convert to the other introduces error; keeping both projections is honest about what each rule needs.
+Why Cue.StartFrame is int? not long. Tests pass int literals; a typical broadcast is well under 2 billion frames; nullable correctly models "unknown / not applicable" without a sentinel value. 0 would be a valid frame, so a sentinel like -1 would be a worse choice.
+Why null StartFrame → Passed in MinFramesFromShotChange. This rule cannot meaningfully evaluate cues without frame data; throwing would make the rule incompatible with SRT/WebVTT/TTML cues (none of which carry frame data today). Passing means "no evidence of failure" which preserves clean composability.
+JSON serializability preserved. int? serializes natively in System.Text.Json (omitted when null with default options, or as null). Cue remains fully JSON-roundtrippable.
+Metrics
+
+test_metrics.jsonl
+Lines 1-4
+{"project_iteration": 1, "attempt": 1, "timestamp": "2026-05-01T12:26:50+02:00", "build_successful": true, "total_tests": 13, "passed": 13, "failed": 0, "pass_rate_percentage": 100.0}
+{"project_iteration": 2, "attempt": 1, "timestamp": "2026-05-01T12:38:00+02:00", "build_successful": true, "total_tests": 13, "passed": 13, "failed": 0, "pass_rate_percentage": 100.0}
+{"project_iteration": 3, "attempt": 1, "timestamp": "2026-05-01T12:55:00+02:00", "build_successful": false, "total_tests": 0, "passed": 0, "failed": 0, "pass_rate_percentage": 0.0}
+{"project_iteration": 3, "attempt": 2, "timestamp": "2026-05-01T12:58:00+02:00", "build_successful": true, "total_tests": 19, "passed": 1

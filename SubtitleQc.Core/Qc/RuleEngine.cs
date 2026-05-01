@@ -8,7 +8,9 @@ namespace SubtitleQc.Core.Qc;
 /// <summary>
 /// Orchestrates rule evaluation over a sequence of cues. The engine is closed
 /// for modification: rule sets are injected, and the traversal logic itself is
-/// stable across iterations.
+/// stable across iterations. Rules that need external integrations (e.g. shot
+/// change data) receive their dependencies through their own constructors,
+/// which keeps the engine itself untouched (DIP/OCP).
 /// </summary>
 public sealed class RuleEngine
 {
